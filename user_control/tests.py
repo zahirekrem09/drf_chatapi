@@ -192,7 +192,7 @@ class TestUserInfo(APITestCase):
         response = self.client.patch(
             self.profile_url + f"/{result['id']}", data=payload)
         result = response.json()
-        print(result)
+        # print(result)
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(result["first_name"], "Z.Ekrem")
