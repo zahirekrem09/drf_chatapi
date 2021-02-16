@@ -221,7 +221,7 @@ class TestUserInfo(APITestCase):
         result = response.json()["results"]
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(result), 0)
+        self.assertEqual(len(result), 1)
 
         # test keyword = ekr
         url = self.profile_url + "?keyword=ekr"
