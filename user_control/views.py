@@ -10,7 +10,8 @@ from .serializers import LoginSerializer, RegisterSerializer, RefreshSerializer,
 from django.contrib.auth import authenticate
 from rest_framework.response import Response
 from .authentication import Authentication
-from rest_framework.permissions import IsAuthenticated
+# from rest_framework.permissions import IsAuthenticated
+from chatapi.custom_auth_permission import IsAuthenticatedCustom
 import re
 from django.db.models import Q, Count, Subquery, OuterRef
 
@@ -101,7 +102,7 @@ class RefreshView(APIView):
 class UserProfileView(ModelViewSet):
     queryset = UserProfile.objects.all()
     serializer_class = UserProfileSerializer
-    permission_classes = (IsAuthenticated,)
+    permission_classes = (IsAuthenticatedCustom,)
 
     def get_queryset(self):
         data = self.request.query_params.dict()
