@@ -198,3 +198,47 @@ class TestUserInfo(APITestCase):
         self.assertEqual(result["first_name"], "Z.Ekrem")
         self.assertEqual(result["last_name"], "Sarı")
         self.assertEqual(result["user"]["username"], "ekrem11")
+
+    def test_user_search(self):
+
+        UserProfile.objects.create(user=self.user, first_name="Ekrem", last_name="Sarı",
+                                   caption="live is all about living", about="I'm a youtuber")
+
+        user2 = CustomUser.objects._create_user(
+            username="tester", password="tester123", email="ekrem13@yahoo.com")
+        UserProfile.objects.create(user=user2, first_name="Vester", last_name="Mango",
+                                   caption="it's all about testing", about="I'm a youtuber")
+
+        user3 = CustomUser.objects._create_user(
+            username="vasman", password="vasman123", email="ekrem14@yahoo.com2")
+        UserProfile.objects.create(user=user3, first_name="Adeyemi", last_name="Boseman",
+                                   caption="it's all about testing", about="I'm a youtuber")
+
+        # test keyword = ekrem sarı
+        url = self.profile_url + "?keyword=ekrem sarı"
+
+        response = self.client.get(url)
+        result = response.json()["results"]
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(result), 0)
+
+        # test keyword = ekr
+        url = self.profile_url + "?keyword=ekr"
+
+        response = self.client.get(url)
+        result = response.json()["results"]
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(result), 2)
+        self.assertEqual(result[1]["user"]["username"], "vasman")
+
+        # test keyword = vester
+        url = self.profile_url + "?keyword=vester"
+
+        response = self.client.get(url)
+        result = response.json()["results"]
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["user"]["username"], "tester")
