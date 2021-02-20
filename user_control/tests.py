@@ -107,12 +107,21 @@ class TestAuth(APITestCase):
 class TestUserInfo(APITestCase):
     profile_url = "/user/profile"
     file_upload_url = "/message/file-upload"
+    login_url = "/user/login"
 
     def setUp(self):
-        self.user = CustomUser.objects.create(
-            username='ekrem11', password='ekrm123')
+        payload = {
+            "username": "ekrem11",
+            "password": "ekrm123",
+            "email": "ekrem12@yahoo.com"
+        }
+        self.user = CustomUser.objects._create_user(**payload)
 
-        self.client.force_authenticate(user=self.user)
+        # login
+        response = self.client.post(self.login_url, data=payload)
+        result = response.json()
+        self.bearer = {
+            'HTTP_AUTHORIZATION': 'Bearer {}'.format(result['access'])}
 
     def test_post_user_profile(self):
 
@@ -125,7 +134,7 @@ class TestUserInfo(APITestCase):
         }
 
         response = self.client.post(
-            self.profile_url, data=payload)
+            self.profile_url, data=payload, **self.bearer)
         result = response.json()
 
         self.assertEqual(response.status_code, 201)
@@ -144,7 +153,7 @@ class TestUserInfo(APITestCase):
 
         # processing
         response = self.client.post(
-            self.file_upload_url, data=data)
+            self.file_upload_url, data=data, **self.bearer)
         result = response.json()
 
         payload = {
@@ -157,9 +166,8 @@ class TestUserInfo(APITestCase):
         }
 
         response = self.client.post(
-            self.profile_url, data=payload)
+            self.profile_url, data=payload, **self.bearer)
         result = response.json()
-        # print(result)
 
         self.assertEqual(response.status_code, 201)
         self.assertEqual(result["first_name"], "Ekrem")
@@ -179,10 +187,10 @@ class TestUserInfo(APITestCase):
         }
 
         response = self.client.post(
-            self.profile_url, data=payload)
+            self.profile_url, data=payload, **self.bearer)
         result = response.json()
 
-        # --- created profile
+        # created profile
 
         payload = {
             "first_name": "Z.Ekrem",
@@ -190,7 +198,7 @@ class TestUserInfo(APITestCase):
         }
 
         response = self.client.patch(
-            self.profile_url + f"/{result['id']}", data=payload)
+            self.profile_url + f"/{result['id']}", data=payload, **self.bearer)
         result = response.json()
         # print(result)
 
@@ -217,7 +225,7 @@ class TestUserInfo(APITestCase):
         # test keyword = ekrem sarı
         url = self.profile_url + "?keyword=ekrem sarı"
 
-        response = self.client.get(url)
+        response = self.client.get(url, **self.bearer)
         result = response.json()["results"]
 
         self.assertEqual(response.status_code, 200)
@@ -226,7 +234,7 @@ class TestUserInfo(APITestCase):
         # test keyword = ekr
         url = self.profile_url + "?keyword=ekr"
 
-        response = self.client.get(url)
+        response = self.client.get(url, **self.bearer)
         result = response.json()["results"]
 
         self.assertEqual(response.status_code, 200)
@@ -236,7 +244,7 @@ class TestUserInfo(APITestCase):
         # test keyword = vester
         url = self.profile_url + "?keyword=vester"
 
-        response = self.client.get(url)
+        response = self.client.get(url, **self.bearer)
         result = response.json()["results"]
 
         self.assertEqual(response.status_code, 200)

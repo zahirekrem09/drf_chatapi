@@ -1,12 +1,12 @@
 import jwt
-from .models import Jwt, CustomUser, UserProfile
+from .models import Jwt, CustomUser, UserProfile, Favorite
 from datetime import datetime, timedelta
 from django.conf import settings
 import random
 import string
 from rest_framework.views import APIView
 from rest_framework.viewsets import ModelViewSet
-from .serializers import LoginSerializer, RegisterSerializer, RefreshSerializer, UserProfileSerializer
+from .serializers import LoginSerializer, RegisterSerializer, RefreshSerializer, UserProfileSerializer, FavoriteSerializer
 from django.contrib.auth import authenticate
 from rest_framework.response import Response
 from .authentication import Authentication
@@ -34,6 +34,19 @@ def get_refresh_token():
         settings.SECRET_KEY,
         algorithm="HS256"
     )
+
+
+def decodeJWT(bearer):
+    if not bearer:
+        return None
+
+    token = bearer[7:]
+    decoded = jwt.decode(token, key=settings.SECRET_KEY)
+    if decoded:
+        try:
+            return CustomUser.objects.get(id=decoded["user_id"])
+        except Exception:
+            return None
 
 
 class LoginView(APIView):
@@ -69,7 +82,10 @@ class RegisterView(APIView):
         serializer = self.serializer_class(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        CustomUser.objects._create_user(**serializer.validated_data)
+        username = serializer.validated_data.pop("username")
+
+        CustomUser.objects._create_user(
+            username=username, **serializer.validated_data)
 
         return Response({"success": "User created."}, status=201)
 
@@ -102,25 +118,51 @@ class RefreshView(APIView):
 class UserProfileView(ModelViewSet):
     queryset = UserProfile.objects.all()
     serializer_class = UserProfileSerializer
-    permission_classes = (IsAuthenticatedCustom,)
+    permission_classes = (IsAuthenticatedCustom, )
 
     def get_queryset(self):
+        if self.request.method.lower() != "get":
+            return self.queryset
+
         data = self.request.query_params.dict()
-        keyword = data.get('keyword', None)
+        data.pop("page", None)
+        keyword = data.pop("keyword", None)
+        print(data)
+
         if keyword:
             search_fields = (
-                'user__username', 'first_name', 'last_name',
+                "user__username", "first_name", "last_name", "user__email"
             )
             query = self.get_query(keyword, search_fields)
+            try:
+                return self.queryset.filter(query).filter(**data).exclude(
+                    Q(user_id=self.request.user.id) |
+                    Q(user__is_superuser=True)
+                )
+            except Exception as e:
+                raise Exception(e)
 
-            return self.queryset.filter(query).distinct()
-
-        return self.queryset
+        print(self.request.user.user_favorites
+              )
+        result = self.queryset.filter(**data).exclude(
+            Q(user_id=self.request.user.id) |
+            Q(user__is_superuser=True)
+        )
+        return result
 
     @staticmethod
-    def get_query(q_string, search_fields):
+    def user_fav_query(user):
+        try:
+            print(user.user_favorites.favorite.filter(
+                id=OuterRef("user_id")).values("pk"))
+            return user.user_favorites.favorite.filter(id=OuterRef("user_id")).values("pk")
+        except Exception:
+            return []
+
+    @staticmethod
+    def get_query(query_string, search_fields):
         query = None  # Query to search for every search term
-        terms = UserProfileView.normalize_query(q_string)
+        terms = UserProfileView.normalize_query(query_string)
         for term in terms:
             or_query = None  # Query to search for a given term in each field
             for field_name in search_fields:
@@ -138,3 +180,78 @@ class UserProfileView(ModelViewSet):
     @staticmethod
     def normalize_query(query_string, findterms=re.compile(r'"([^"]+)"|(\S+)').findall, normspace=re.compile(r'\s{2,}').sub):
         return [normspace(' ', (t[0] or t[1]).strip()) for t in findterms(query_string)]
+
+
+class MeView(APIView):
+    permission_classes = (IsAuthenticatedCustom, )
+    serializer_class = UserProfileSerializer
+
+    def get(self, request):
+        data = {}
+        try:
+            data = self.serializer_class(request.user.user_profile).data
+        except Exception:
+            data = {
+                "user": {
+                    "id": request.user.id
+                }
+            }
+        return Response(data, status=200)
+
+
+class LogoutView(APIView):
+    permission_classes = (IsAuthenticatedCustom, )
+
+    def get(self, request):
+        user_id = request.user.id
+
+        Jwt.objects.filter(user_id=user_id).delete()
+
+        return Response("logged out successfully", status=200)
+
+
+class UpdateFavoriteView(APIView):
+    permission_classes = (IsAuthenticatedCustom,)
+    serializer_class = FavoriteSerializer
+
+    def post(self, request, *args, **kwargs):
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            favorite_user = CustomUser.objects.get(
+                id=serializer.validated_data["favorite_id"])
+        except Exception:
+            raise Exception("Favorite user does not exist")
+
+        try:
+            fav = request.user.user_favorites
+        except Exception:
+            fav = Favorite.objects.create(user_id=request.user.id)
+
+        favorite = fav.favorite.filter(id=favorite_user.id)
+        if favorite:
+            fav.favorite.remove(favorite_user)
+            return Response("removed")
+
+        fav.favorite.add(favorite_user)
+        return Response("added")
+
+
+class CheckIsFavoriteView(APIView):
+    permission_classes = (IsAuthenticatedCustom,)
+
+    def get(self, request, *args, **kwargs):
+        favorite_id = kwargs.get("favorite_id", None)
+        try:
+            favorite = request.user.user_favorites.favorite.filter(
+                id=favorite_id)
+            if favorite:
+                return Response(True)
+            return Response(False)
+        except Exception:
+            return Response(False)
+
+
+# .annotate(
+#     fav_count=Count(self.user_fav_query(self.request.user))
+# ).order_by("-fav_count")

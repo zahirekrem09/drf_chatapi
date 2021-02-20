@@ -22,8 +22,10 @@ def handleRequest(serializerData):
         'Content-Type': 'application/json',
     }
     try:
-        requests.post(settings.SOCKET_SERVER, json.dumps(
+        t = requests.post(settings.SOCKET_SERVER, json.dumps(
             notification), headers=headers)
+        print(t)
+
     except Exception as e:
         pass
     return True
@@ -100,3 +102,12 @@ class MessageView(ModelViewSet):
         handleRequest(serializer)
 
         return Response(serializer.data, status=200)
+
+
+class ReadMultipleMessages(APIView):
+
+    def post(self, request):
+        data = request.data.get("message_ids", None)
+
+        Message.objects.filter(id__in=data).update(is_read=True)
+        return Response("success")

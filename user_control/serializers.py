@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import UserProfile, CustomUser
+from .models import UserProfile, CustomUser, Favorite
 from message_control.serializers import GenericFileUploadSerializer
 
 
@@ -50,5 +50,5 @@ class UserProfileSerializer(serializers.ModelSerializer):
         return message.count()
 
 
-# class FavoriteSerializer(serializers.Serializer):
-#     favorite_id = serializers.IntegerField()
+class FavoriteSerializer(serializers.Serializer):
+    favorite_id = serializers.IntegerField()
